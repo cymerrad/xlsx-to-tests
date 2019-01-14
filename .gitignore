@@ -1,2 +1,4 @@
 myenv
 .vscode
+dist
+__pycache__

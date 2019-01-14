@@ -8,16 +8,16 @@ _template_content1 = '''const data = [
 	{test_data}
 ];
 
-describe("{test_name}", () => {
+describe("{test_name}", () => {{
 	const subject = {{}} as any; // IMPLEMENT ME
 
-  it.each(data)({each_message_format}, async ({all_arguments}) => {
+  it.each(data)({each_message_format}, async ({all_arguments}) => {{
     const output = await subject({test_input});
     expect(output).toBe({test_output});
 
 		// IMPLEMENT ME
-  });
-});
+  }});
+}});
 '''
 
 # reserved keywords from sheet
@@ -25,7 +25,7 @@ _r_input = "input"
 _r_output = "output"
 _r_comment = "comment"
 _r_implemented = "implemented"
-_reserved = [_r_input, _r_input, _r_comment, _r_implemented]
+_reserved = [_r_input, _r_output, _r_comment, _r_implemented]
 
 _context_key = "context"
 
@@ -33,17 +33,28 @@ _context_key = "context"
 def generateTestData(sheet):
     keys_ord = [str(cell.value).lower()
                 for cell in sheet[1]]  # lower-case strings
+    max_row = len(keys_ord) - 1
     context_keys = [x for x in keys_ord]  # hard copy
     for k in _reserved:
-        context_keys.remove(k)  # remove all the keys we know _always_ exist
+        try:
+            # remove all the keys we know _always_ exist
+            context_keys.remove(k)
+        except ValueError:
+            pass
+
+    no_context = False
+    if len(context_keys) == 0:
+        no_context = True
 
     rows = []
     for row in sheet:
         new_row = {}
         for ind, cell in enumerate(row):
+            if cell.value is None and ind != max_row:  # empty value and non-comment
+                break
             new_row[keys_ord[ind]] = cell.value
-
-        rows.append(new_row)
+        else:
+            rows.append(new_row)
 
     # first object looks like: {"input":"input", ... } so it's trash
     rows = rows[1:]
@@ -54,52 +65,60 @@ def generateTestData(sheet):
         new_row = {}
         new_row[_r_input] = row[_r_input]
         new_row[_r_output] = row[_r_output]
-        new_unique = {}
+
+        new_context = {}
         for k in context_keys:
-            new_unique[k] = row[k]
+            new_context[k] = row[k]
+        new_row[_context_key] = json.dumps(new_context)  # iffy
 
-        new_row[_context_key] = json.dumps(new_unique)
+        test_data.append(new_row)
 
-        test_data.append(row)
-
-    # test_data should contain objects of three key-value pairs
-    # keys of: "input", "output" and "context"
-    data_lines = ["[\"{input}\", \"{context}\", {}}]".format(
+    # test_data should contain objects of three or two key-value pairs
+    # keys of: "input", "output" and "context"; "context" is optional
+    datum_string = "[{input}, {output}]" if no_context else "[{input}, {context}, {output}]"
+    datum_names = [_r_input, _r_output] if no_context else [
+        _r_input, _context_key, _r_output]
+    data_lines = [datum_string.format(
         **datum) for datum in test_data]
 
-    return (",\n".join(data_lines), keys_ord)
+    return (",\n".join(data_lines), datum_names)
 
 
-def createTestFile(filepath, sheet, test_subject, test_message='testing %o'):
+def createTestFileContents(sheet, test_subject, test_message='testing %o'):
     data = generateTestData(sheet)
     test_data = data[0]
-    all_args = ",".join(data[1])
-    input_args = ",".join(all_args[:-1])
-    output_arg = str(all_args[-1])
+    all_args = ", ".join(data[1])
+    input_args = ", ".join(data[1][:-1])
+    output_arg = str(data[1][-1])
 
+    return {
+        "test_data": test_data,
+        "test_name": test_subject,
+        "each_message_format": test_message,
+        "all_arguments": all_args,
+        "test_input": input_args,
+        "test_output": output_arg,
+    }
+
+
+def writeToTestFile(filepath, content):
     with open(filepath, "w") as fp:
-        fp.write(_template_content1.format(**{
-            "test_data": test_data,
-            "test_name": test_subject,
-            "each_message_format": test_message,
-            "all_arguments": all_args,
-            "test_input": input_args,
-            "test_output": output_arg,
-        }))
+        fp.write(content)
 
 
 def absoluteFileLocation(base):
-    return (PosixPath("dist") / PosixPath(base + ".spec.ts")).absolute()
+    output_dir = PosixPath("dist")  # todo: configurable
+    if not output_dir.is_dir():
+        output_dir.mkdir()
+    return (output_dir / PosixPath(base + ".spec.ts")).absolute()
 
 
 def main():
     wb = op.load_workbook(_default_file)
     for sheetname in wb.sheetnames:
-        try:
-            createTestFile(absoluteFileLocation(
-                sheetname), wb[sheetname], sheetname)
-        except Exception as e:
-            print("Error occured", e)
+        content_dict = createTestFileContents(wb[sheetname], sheetname)
+        content = _template_content1.format(**content_dict)
+        writeToTestFile(absoluteFileLocation(sheetname), content)
 
 
 if __name__ == "__main__":
