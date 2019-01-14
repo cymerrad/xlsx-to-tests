@@ -5,7 +5,7 @@ import json
 import argparse
 
 _default_file = "ResolverTests.xlsx"
-_template_content1 = '''const data = [
+_template_content_file = '''const data = [
   {test_data}
 ];
 
@@ -19,6 +19,10 @@ describe("{test_name}", () => {{
     // IMPLEMENT ME
   }});
 }});
+'''
+
+_template_content_stdout = '''\n###### {test_name} ######
+  {test_data}
 '''
 
 # reserved keywords from sheet
@@ -86,7 +90,7 @@ def generateTestData(sheet):
     return (",\n  ".join(data_lines), datum_names)
 
 
-def createTestFileContents(sheet, test_subject, test_message='testing %o', test_async=True):
+def createTestFileContents(sheet, test_subject, test_message='testing %o', test_async=True, **kwargs):
     data = generateTestData(sheet)
     test_data = data[0]
     all_args = ", ".join(data[1])
@@ -118,10 +122,16 @@ def absoluteFileLocation(base):
 
 def main(args):
     wb = op.load_workbook(_default_file)
+    print_to_file = False if args.get("only_data") else True
+
     for sheetname in wb.sheetnames:
         content_dict = createTestFileContents(wb[sheetname], sheetname, **args)
-        content = _template_content1.format(**content_dict)
-        writeToTestFile(absoluteFileLocation(sheetname), content)
+        if print_to_file:
+            content = _template_content_file.format(**content_dict)
+            writeToTestFile(absoluteFileLocation(sheetname), content)
+        else:
+            content = _template_content_stdout.format(**content_dict)
+            print(content)
 
 
 if __name__ == "__main__":
@@ -130,6 +140,8 @@ if __name__ == "__main__":
                         help="message template for the test case", type=str)
     parser.add_argument(
         "--not_async", help="test case will not be an asynchronous lambda", action="store_true")
+    parser.add_argument(
+        "--only_data", help="print to stdout only data", action="store_true")
 
     args = parser.parse_args()
     func_args = {}
@@ -137,5 +149,7 @@ if __name__ == "__main__":
         func_args["test_message"] = getattr(args, "message")
     if getattr(args, "not_async"):
         func_args["test_async"] = False  # tricky
+    if getattr(args, "only_data"):
+        func_args["only_data"] = True
 
     main(func_args)
