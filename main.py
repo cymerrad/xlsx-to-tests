@@ -68,8 +68,9 @@ def generateTestData(sheet):
 
         new_context = {}
         for k in context_keys:
-            new_context[k] = row[k]
-        new_row[_context_key] = json.dumps(new_context)  # iffy
+            # clear the value from single and double quotations (json.dumps adds its own)
+            new_context[k] = str(row[k]).lstrip("\"'").rstrip("\"'")
+        new_row[_context_key] = json.dumps(new_context)
 
         test_data.append(new_row)
 
