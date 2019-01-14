@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import openpyxl as op
 from pathlib import PosixPath
+import json
 
 _default_file = "ResolverTests.xlsx"
 _template_content1 = '''const data = [
@@ -19,9 +20,54 @@ describe("{test_name}", () => {
 });
 '''
 
+# reserved keywords from sheet
+_r_input = "input"
+_r_output = "output"
+_r_comment = "comment"
+_r_implemented = "implemented"
+_reserved = [_r_input, _r_input, _r_comment, _r_implemented]
+
+_context_key = "context"
+
 
 def generateTestData(sheet):
-    return ("\n".join([]), [])
+    keys_ord = [str(cell.value).lower()
+                for cell in sheet[1]]  # lower-case strings
+    context_keys = [x for x in keys_ord]  # hard copy
+    for k in _reserved:
+        context_keys.remove(k)  # remove all the keys we know _always_ exist
+
+    rows = []
+    for row in sheet:
+        new_row = {}
+        for ind, cell in enumerate(row):
+            new_row[keys_ord[ind]] = cell.value
+
+        rows.append(new_row)
+
+    # first object looks like: {"input":"input", ... } so it's trash
+    rows = rows[1:]
+    # rows should contain now objects of key-value pairs: {"input":"some string", ...}
+
+    test_data = []
+    for row in rows:
+        new_row = {}
+        new_row[_r_input] = row[_r_input]
+        new_row[_r_output] = row[_r_output]
+        new_unique = {}
+        for k in context_keys:
+            new_unique[k] = row[k]
+
+        new_row[_context_key] = json.dumps(new_unique)
+
+        test_data.append(row)
+
+    # test_data should contain objects of three key-value pairs
+    # keys of: "input", "output" and "context"
+    data_lines = ["[\"{input}\", \"{context}\", {}}]".format(
+        **datum) for datum in test_data]
+
+    return (",\n".join(data_lines), keys_ord)
 
 
 def createTestFile(filepath, sheet, test_subject, test_message='testing %o'):
