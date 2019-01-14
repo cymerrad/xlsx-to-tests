@@ -12,8 +12,8 @@ describe("{test_name}", () => {{
   const subject = {{}} as any; // IMPLEMENT ME
 
   it.each(data)("{each_message_format}", async ({all_arguments}) => {{
-    const output = await subject({test_input});
-    expect(output).toBe({test_output});
+    const actualOutput = await subject({test_input});
+    expect(actualOutput).toBe({test_output});
 
     // IMPLEMENT ME
   }});
