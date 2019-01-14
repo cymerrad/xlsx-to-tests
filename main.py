@@ -5,17 +5,17 @@ import json
 
 _default_file = "ResolverTests.xlsx"
 _template_content1 = '''const data = [
-	{test_data}
+  {test_data}
 ];
 
 describe("{test_name}", () => {{
-	const subject = {{}} as any; // IMPLEMENT ME
+  const subject = {{}} as any; // IMPLEMENT ME
 
-  it.each(data)({each_message_format}, async ({all_arguments}) => {{
+  it.each(data)("{each_message_format}", async ({all_arguments}) => {{
     const output = await subject({test_input});
     expect(output).toBe({test_output});
 
-		// IMPLEMENT ME
+    // IMPLEMENT ME
   }});
 }});
 '''
@@ -82,7 +82,7 @@ def generateTestData(sheet):
     data_lines = [datum_string.format(
         **datum) for datum in test_data]
 
-    return (",\n".join(data_lines), datum_names)
+    return (",\n  ".join(data_lines), datum_names)
 
 
 def createTestFileContents(sheet, test_subject, test_message='testing %o'):
