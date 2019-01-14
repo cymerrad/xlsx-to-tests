@@ -2,6 +2,7 @@
 import openpyxl as op
 from pathlib import PosixPath
 import json
+import argparse
 
 _default_file = "ResolverTests.xlsx"
 _template_content1 = '''const data = [
@@ -11,7 +12,7 @@ _template_content1 = '''const data = [
 describe("{test_name}", () => {{
   const subject = {{}} as any; // IMPLEMENT ME
 
-  it.each(data)("{each_message_format}", async ({all_arguments}) => {{
+  it.each(data)("{each_message_format}", {test_async}({all_arguments}) => {{
     const actualOutput = await subject({test_input});
     expect(actualOutput).toBe({test_output});
 
@@ -85,7 +86,7 @@ def generateTestData(sheet):
     return (",\n  ".join(data_lines), datum_names)
 
 
-def createTestFileContents(sheet, test_subject, test_message='testing %o'):
+def createTestFileContents(sheet, test_subject, test_message='testing %o', test_async=True):
     data = generateTestData(sheet)
     test_data = data[0]
     all_args = ", ".join(data[1])
@@ -99,6 +100,7 @@ def createTestFileContents(sheet, test_subject, test_message='testing %o'):
         "all_arguments": all_args,
         "test_input": input_args,
         "test_output": output_arg,
+        "test_async": "async " if test_async else "",
     }
 
 
@@ -114,13 +116,26 @@ def absoluteFileLocation(base):
     return (output_dir / PosixPath(base + ".spec.ts")).absolute()
 
 
-def main():
+def main(args):
     wb = op.load_workbook(_default_file)
     for sheetname in wb.sheetnames:
-        content_dict = createTestFileContents(wb[sheetname], sheetname)
+        content_dict = createTestFileContents(wb[sheetname], sheetname, **args)
         content = _template_content1.format(**content_dict)
         writeToTestFile(absoluteFileLocation(sheetname), content)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--message",
+                        help="message template for the test case", type=str)
+    parser.add_argument(
+        "--not_async", help="test case will not be an asynchronous lambda", action="store_true")
+
+    args = parser.parse_args()
+    func_args = {}
+    if getattr(args, "message"):
+        func_args["test_message"] = getattr(args, "message")
+    if getattr(args, "not_async"):
+        func_args["test_async"] = False  # tricky
+
+    main(func_args)
