@@ -113,14 +113,14 @@ def writeToTestFile(filepath, content):
         fp.write(content)
 
 
-def absoluteFileLocation(base):
-    output_dir = PosixPath("dist")  # todo: configurable
-    if not output_dir.is_dir():
-        output_dir.mkdir()
-    return (output_dir / PosixPath(base + ".spec.ts")).absolute()
+def absoluteFileLocation(output_dir, base):
+    out_dir = PosixPath(output_dir)  # todo: configurable
+    if not out_dir.is_dir():
+        out_dir.mkdir()
+    return (out_dir / PosixPath(base + ".spec.ts")).absolute()
 
 
-def main(input_file, only_data=False, **kwargs):
+def main(input_file, output_dir, only_data=False, **kwargs):
     wb = op.load_workbook(input_file)
 
     for sheetname in wb.sheetnames:
@@ -128,7 +128,8 @@ def main(input_file, only_data=False, **kwargs):
             wb[sheetname], sheetname, **kwargs)
         if not only_data:
             content = _template_content_file.format(**content_dict)
-            writeToTestFile(absoluteFileLocation(sheetname), content)
+            writeToTestFile(absoluteFileLocation(
+                output_dir, sheetname), content)
         else:
             content = _template_content_stdout.format(**content_dict)
             print(content)
@@ -141,6 +142,8 @@ if __name__ == "__main__":
     parser.add_argument("--message",
                         help="message template for the test case", type=str)
     parser.add_argument(
+        "--output", help="directory in which to dump the tests; default is \"dist\"", type=str, default="dist")
+    parser.add_argument(
         "--not_async", help="test case will not be an asynchronous lambda", action="store_true")
     parser.add_argument(
         "--only_data", help="print to stdout only data", action="store_true")
@@ -148,6 +151,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     func_args = {}
     func_args["input_file"] = getattr(args, "file")
+    func_args["output_dir"] = getattr(args, "output")
     if getattr(args, "message"):
         func_args["test_message"] = getattr(args, "message")
     if getattr(args, "not_async"):
