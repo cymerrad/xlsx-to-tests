@@ -2,3 +2,4 @@ myenv
 .vscode
 dist
 __pycache__
+*.xlsx
