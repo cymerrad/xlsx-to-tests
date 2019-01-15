@@ -3,6 +3,7 @@ import openpyxl as op
 from pathlib import PosixPath
 import json
 import argparse
+import re
 
 _debug = False
 
@@ -12,9 +13,11 @@ def debug(format_string, *args):
         print(format_string.format(*args))
 
 
-_template_content_file = '''const data = [
+_template_content_just_data = '''const data = [
   {test_data}
-];
+];'''
+
+_template_content_file = _template_content_just_data+'''
 
 describe("{test_name}", () => {{
   const subject = {{}} as any; // IMPLEMENT ME
@@ -159,6 +162,17 @@ def createTestFileContents(sheet, test_subject, test_message='testing %o', test_
     }
 
 
+def substituteDataInFile(filepath, content):
+    fr = open(filepath, "r")
+    file_contents = fr.read()
+    pat_o = re.compile(r"const data = \[[\s\S]*?\];")
+    new_contents = pat_o.sub(
+        _template_content_just_data.format(**content), file_contents)
+    fr.close()
+    fw = open(filepath, "w")
+    fw.write(new_contents)
+
+
 def writeToTestFile(filepath, content):
     with open(filepath, "w") as fp:
         fp.write(content)
@@ -185,6 +199,12 @@ def main(input_file, output_dir, only_data=False, **kwargs):
         else:
             content_dict = createTestFileContents(
                 wb[sheetname], sheetname, **kwargs)
+
+            # magical scenario in which we only substitute data in the file
+            if file_out.exists() and not only_data:
+                substituteDataInFile(file_out, content_dict)
+                continue
+
             if not only_data:
                 content = _template_content_file.format(**content_dict)
             else:
