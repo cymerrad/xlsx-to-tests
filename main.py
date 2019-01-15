@@ -185,10 +185,13 @@ def absoluteFileLocation(output_dir, base):
     return (out_dir / PosixPath(base + ".spec.ts")).absolute()
 
 
-def main(input_file, output_dir, only_data=False, **kwargs):
+def main(input_file, output_dir, only_data=False, sheets=[], **kwargs):
     wb = op.load_workbook(input_file)
 
     for sheetname in wb.sheetnames:
+        if len(sheets) and sheetname.lower() not in sheets:
+            continue
+
         content = ""
         file_out = absoluteFileLocation(output_dir, sheetname)
 
@@ -223,6 +226,8 @@ if __name__ == "__main__":
     parser.add_argument("--message",
                         help="message template for the test case", type=str)
     parser.add_argument(
+        "--sheets", help="choose sheets only from given comma-delimited list (standard, unix one)", type=str)
+    parser.add_argument(
         "--output", help="directory in which to dump the tests; default is \"dist\"", type=str, default="dist")
     parser.add_argument(
         "--not_async", help="test case will not be an asynchronous lambda", action="store_true")
@@ -237,6 +242,9 @@ if __name__ == "__main__":
         _debug = True
     func_args["input_file"] = getattr(args, "file")
     func_args["output_dir"] = getattr(args, "output")
+    if getattr(args, "sheets"):
+        csl: str = getattr(args, "sheets")
+        func_args["sheets"] = [x.lower() for x in csl.split(",")]
     if getattr(args, "message"):
         func_args["test_message"] = getattr(args, "message")
     if getattr(args, "not_async"):
