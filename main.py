@@ -4,7 +4,6 @@ from pathlib import PosixPath
 import json
 import argparse
 
-_default_file = "ResolverTests.xlsx"
 _template_content_file = '''const data = [
   {test_data}
 ];
@@ -34,11 +33,24 @@ _reserved = [_r_input, _r_output, _r_comment, _r_implemented]
 
 _context_key = "context"
 
+# special snowflake sheets
+_snowflakes = ["MockedFs"]  # define here
+# we will be using that, for safety
+_snowflakes = [x.lower() for x in _snowflakes]
+
+_debug = False
+
+
+def debug(format_string, *args):
+    if _debug:
+        print(format_string.format(*args))
+
 
 def generateTestData(sheet):
     keys_ord = [str(cell.value).lower()
-                for cell in sheet[1]]  # lower-case strings
-    max_row = len(keys_ord) - 1
+                for cell in sheet[1] if cell.value]  # lower-case strings
+    # maximal col in row is defined by a comment column
+    max_col = keys_ord.index(_r_comment)
     context_keys = [x for x in keys_ord]  # hard copy
     for k in _reserved:
         try:
@@ -55,8 +67,15 @@ def generateTestData(sheet):
     for row in sheet:
         new_row = {}
         for ind, cell in enumerate(row):
-            if cell.value is None and ind != max_row:  # empty value and non-comment
-                break
+            if ind > max_col:
+                continue
+
+            # empty value before a comment column -> this invalidates a whole row
+            if cell.value is None and ind < max_col:
+                debug("sheet: {} | ind: {} < {} | col name: {}",
+                      sheet._id, ind, max_col, keys_ord[ind])
+                break  # invalidate, won't append
+
             new_row[keys_ord[ind]] = cell.value
         else:
             rows.append(new_row)
@@ -75,6 +94,7 @@ def generateTestData(sheet):
         for k in context_keys:
             # clear the value from single and double quotations (json.dumps adds its own)
             new_context[k] = str(row[k]).lstrip("\"'").rstrip("\"'")
+
         new_row[_context_key] = json.dumps(new_context)
 
         test_data.append(new_row)
@@ -124,6 +144,9 @@ def main(input_file, output_dir, only_data=False, **kwargs):
     wb = op.load_workbook(input_file)
 
     for sheetname in wb.sheetnames:
+        if sheetname.lower() in _snowflakes:
+            continue
+
         content_dict = createTestFileContents(
             wb[sheetname], sheetname, **kwargs)
         if not only_data:
@@ -147,9 +170,13 @@ if __name__ == "__main__":
         "--not_async", help="test case will not be an asynchronous lambda", action="store_true")
     parser.add_argument(
         "--only_data", help="print to stdout only data", action="store_true")
+    parser.add_argument(
+        "--debug", help="print extra information", action="store_true")
 
     args = parser.parse_args()
     func_args = {}
+    if getattr(args, "debug"):
+        _debug = True
     func_args["input_file"] = getattr(args, "file")
     func_args["output_dir"] = getattr(args, "output")
     if getattr(args, "message"):
@@ -158,5 +185,7 @@ if __name__ == "__main__":
         func_args["test_async"] = False  # tricky
     if getattr(args, "only_data"):
         func_args["only_data"] = True
+
+    debug("func_args: {}", func_args)
 
     main(**func_args)
