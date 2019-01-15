@@ -120,13 +120,13 @@ def absoluteFileLocation(base):
     return (output_dir / PosixPath(base + ".spec.ts")).absolute()
 
 
-def main(args):
-    wb = op.load_workbook(_default_file)
-    print_to_file = False if args.get("only_data") else True
+def main(input_file, only_data=False, **kwargs):
+    wb = op.load_workbook(input_file)
 
     for sheetname in wb.sheetnames:
-        content_dict = createTestFileContents(wb[sheetname], sheetname, **args)
-        if print_to_file:
+        content_dict = createTestFileContents(
+            wb[sheetname], sheetname, **kwargs)
+        if not only_data:
             content = _template_content_file.format(**content_dict)
             writeToTestFile(absoluteFileLocation(sheetname), content)
         else:
@@ -136,6 +136,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("file", help="input M$ Excel file; default is ResolverTests.xlsx",
+                        type=str)
     parser.add_argument("--message",
                         help="message template for the test case", type=str)
     parser.add_argument(
@@ -145,6 +147,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     func_args = {}
+    func_args["input_file"] = getattr(args, "file")
     if getattr(args, "message"):
         func_args["test_message"] = getattr(args, "message")
     if getattr(args, "not_async"):
@@ -152,4 +155,4 @@ if __name__ == "__main__":
     if getattr(args, "only_data"):
         func_args["only_data"] = True
 
-    main(func_args)
+    main(**func_args)
