@@ -4,6 +4,14 @@ from pathlib import PosixPath
 import json
 import argparse
 
+_debug = False
+
+
+def debug(format_string, *args):
+    if _debug:
+        print(format_string.format(*args))
+
+
 _template_content_file = '''const data = [
   {test_data}
 ];
@@ -24,6 +32,12 @@ _template_content_stdout = '''\n###### {test_name} ######
   {test_data}
 '''
 
+_template_mocked_fs_file = '''const mockedFS = {{
+  {test_fs}
+}}
+
+export default mockedFS;'''
+
 # reserved keywords from sheet
 _r_input = "input"
 _r_output = "output"
@@ -33,17 +47,34 @@ _reserved = [_r_input, _r_output, _r_comment, _r_implemented]
 
 _context_key = "context"
 
+
+def createMockFsContents(sheet):
+    expected_keys = ["file", "contents"]  # ignore the memes
+    rows = []
+
+    for row in sheet:
+        new_row = []
+        for ind, cell in enumerate(row):
+            if ind >= len(expected_keys):
+                continue
+            # again, ignore quotations on the left and right
+            clean_str = str(cell.value).lstrip(
+                "\"'").rstrip("\"'") if cell.value else ""
+            new_row.append(clean_str)
+
+        rows.append(new_row)
+
+    rows_stringified = ["\"{}\": \"{}\"".format(*row) for row in rows[1:]]
+
+    return {"test_fs": ", \n  ".join(rows_stringified)}
+
+
 # special snowflake sheets
-_snowflakes = ["MockedFs"]  # define here
-# we will be using that, for safety
-_snowflakes = [x.lower() for x in _snowflakes]
-
-_debug = False
-
-
-def debug(format_string, *args):
-    if _debug:
-        print(format_string.format(*args))
+_snowflakes = {
+    "MockedFs": (createMockFsContents, _template_mocked_fs_file)
+}
+# we will be using that, lower case for safety
+_snowflakes = dict([(k.lower(), v) for k, v in _snowflakes.items()])
 
 
 def generateTestData(sheet):
@@ -144,17 +175,24 @@ def main(input_file, output_dir, only_data=False, **kwargs):
     wb = op.load_workbook(input_file)
 
     for sheetname in wb.sheetnames:
-        if sheetname.lower() in _snowflakes:
-            continue
+        content = ""
+        file_out = absoluteFileLocation(output_dir, sheetname)
 
-        content_dict = createTestFileContents(
-            wb[sheetname], sheetname, **kwargs)
-        if not only_data:
-            content = _template_content_file.format(**content_dict)
-            writeToTestFile(absoluteFileLocation(
-                output_dir, sheetname), content)
+        if sheetname.lower() in _snowflakes.keys():
+            handling, template = _snowflakes[sheetname.lower()]
+            content_dict = handling(wb[sheetname])
+            content = template.format(**content_dict)
         else:
-            content = _template_content_stdout.format(**content_dict)
+            content_dict = createTestFileContents(
+                wb[sheetname], sheetname, **kwargs)
+            if not only_data:
+                content = _template_content_file.format(**content_dict)
+            else:
+                content = _template_content_stdout.format(**content_dict)
+
+        if not only_data:
+            writeToTestFile(file_out, content)
+        else:
             print(content)
 
 
